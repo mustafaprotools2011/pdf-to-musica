@@ -1,20 +1,17 @@
 [project]
 name = "pdf-to-musica"
-version = "0.1.0"
-description = "Turn PDF documents into deterministic MIDI and WAV music from extracted text."
+version = "0.2.0"
+description = "Convert sheet music PDFs to compressed MusicXML .mxl using Audiveris OMR."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "PDF to Musica" }]
 license = "MIT"
 dependencies = [
-  "pypdf>=5.0.0",
-  "numpy>=2.0.0",
-  "scipy>=1.13.0",
   "streamlit>=1.38.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "reportlab>=4.0.0"]
+dev = ["pytest>=8.0.0"]
 
 [project.scripts]
 pdf-to-musica = "pdf_to_musica.cli:main"

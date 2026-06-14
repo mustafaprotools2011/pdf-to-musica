@@ -3,42 +3,58 @@ from tempfile import TemporaryDirectory
 
 import streamlit as st
 
-from pdf_to_musica.converter import ConversionOptions, convert_pdf_to_music
+from pdf_to_musica.converter import (
+    AudiverisConversionError,
+    AudiverisNotFoundError,
+    ConversionOptions,
+    audiveris_available,
+    convert_pdf_to_mxl,
+)
 
 st.set_page_config(page_title="PDF to Musica", page_icon="🎼", layout="centered")
 st.title("🎼 PDF to Musica")
-st.caption("Upload a PDF strategy, essay, or story and turn its words into MIDI + WAV music.")
+st.caption("Convert sheet-music PDFs into editable compressed MusicXML .mxl files.")
 
-uploaded = st.file_uploader("PDF file", type=["pdf"])
-col1, col2 = st.columns(2)
-with col1:
-    bpm = st.slider("BPM", min_value=60, max_value=180, value=120, step=5)
-with col2:
-    max_notes = st.slider("Max notes", min_value=16, max_value=256, value=96, step=16)
+st.info(
+    "This app uses Audiveris OMR. It converts printed music notation in a PDF into MusicXML/MXL. "
+    "It does not generate new music."
+)
 
-if uploaded and st.button("Generate music", type="primary"):
-    with st.spinner("Reading PDF and composing..."):
+uploaded = st.file_uploader("Sheet-music PDF", type=["pdf"])
+audiveris_command = st.text_input("Audiveris command/path", value="audiveris")
+timeout = st.number_input("Timeout seconds", min_value=60, max_value=3600, value=600, step=60)
+
+if audiveris_command and not audiveris_available(audiveris_command):
+    st.warning("Audiveris was not found from this app environment. Conversion will fail until it is installed or a valid path is provided.")
+
+if uploaded and st.button("Convert to MXL", type="primary"):
+    with st.spinner("Running optical music recognition..."):
         with TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             pdf_path = tmp_path / uploaded.name
             pdf_path.write_bytes(uploaded.getvalue())
             try:
-                result = convert_pdf_to_music(
+                result = convert_pdf_to_mxl(
                     pdf_path,
                     output_dir=tmp_path / "out",
-                    options=ConversionOptions(bpm=bpm, max_notes=max_notes),
+                    options=ConversionOptions(audiveris_command=audiveris_command, timeout_seconds=int(timeout)),
                 )
-            except Exception as exc:  # Streamlit should show clear user-safe error.
+            except (AudiverisNotFoundError, AudiverisConversionError, FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
                 st.stop()
 
-            st.success(f"Generated {result.note_count} notes")
-            st.audio(result.wav_path.read_bytes(), format="audio/wav")
-            st.download_button("Download WAV", result.wav_path.read_bytes(), file_name=result.wav_path.name)
-            st.download_button("Download MIDI", result.midi_path.read_bytes(), file_name=result.midi_path.name)
-            st.download_button("Download summary", result.summary_path.read_text(encoding="utf-8"), file_name=result.summary_path.name)
-            with st.expander("Extracted text preview"):
-                st.write(result.extracted_text[:1500])
+            mxl_bytes = result.mxl_path.read_bytes()
+            st.success("MXL file generated successfully")
+            st.download_button(
+                "Download .mxl",
+                mxl_bytes,
+                file_name=result.mxl_path.name,
+                mime="application/vnd.recordare.musicxml",
+            )
+            with st.expander("Audiveris log"):
+                st.text(result.stdout or "No stdout")
+                if result.stderr:
+                    st.text(result.stderr)
 
 st.markdown("---")
-st.markdown("**Launch idea:** free 3 conversions/day, paid $5/month for longer PDFs and premium instruments.")
+st.markdown("**Best input:** clean, high-resolution sheet-music PDFs. Scanned images may need manual correction after export.")

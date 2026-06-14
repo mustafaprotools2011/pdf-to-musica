@@ -1,52 +1,51 @@
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
-from reportlab.pdfgen import canvas
 
-from pdf_to_musica.converter import ConversionOptions, convert_pdf_to_music, text_to_notes
-
-
-def make_pdf(path: Path, text: str) -> None:
-    pdf = canvas.Canvas(str(path))
-    pdf.drawString(72, 720, text)
-    pdf.save()
+from pdf_to_musica.converter import AudiverisNotFoundError, ConversionOptions, convert_pdf_to_mxl
 
 
-def test_text_to_notes_is_deterministic_and_respects_limits():
-    text = "Launch fast. Make revenue. Ship music."
+def test_convert_pdf_to_mxl_invokes_audiveris_and_returns_mxl(tmp_path: Path):
+    pdf_path = tmp_path / "score.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4 fake test score")
 
-    first = text_to_notes(text, max_notes=12)
-    second = text_to_notes(text, max_notes=12)
+    def fake_runner(command, *, cwd=None, timeout=None):
+        assert "-batch" in command
+        assert "-export" in command
+        assert str(pdf_path) in command
+        out_dir = Path(command[command.index("-output") + 1])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "score.mxl").write_bytes(b"PK\x03\x04fake compressed musicxml")
+        return Mock(returncode=0, stdout="exported", stderr="")
 
-    assert first == second
-    assert 1 <= len(first) <= 12
-    assert all(48 <= note.pitch <= 84 for note in first)
-    assert all(note.duration > 0 for note in first)
-
-
-def test_convert_pdf_to_music_creates_midi_wav_and_summary(tmp_path: Path):
-    pdf_path = tmp_path / "strategy.pdf"
-    make_pdf(pdf_path, "This PDF strategy should become a bright musical theme.")
-
-    result = convert_pdf_to_music(
+    result = convert_pdf_to_mxl(
         pdf_path,
         output_dir=tmp_path / "out",
-        options=ConversionOptions(max_notes=16, bpm=100),
+        options=ConversionOptions(audiveris_command="audiveris", timeout_seconds=30),
+        runner=fake_runner,
     )
 
-    assert result.midi_path.exists()
-    assert result.wav_path.exists()
-    assert result.summary_path.exists()
-    assert result.note_count > 0
-    assert result.extracted_text.startswith("This PDF strategy")
-    assert result.midi_path.read_bytes()[:4] == b"MThd"
-    assert result.wav_path.read_bytes()[:4] == b"RIFF"
-    assert "PDF to Musica" in result.summary_path.read_text(encoding="utf-8")
+    assert result.mxl_path.exists()
+    assert result.mxl_path.read_bytes().startswith(b"PK")
+    assert result.source_pdf == pdf_path
+    assert result.engine == "Audiveris"
 
 
-def test_empty_pdf_text_raises_clear_error(tmp_path: Path):
-    pdf_path = tmp_path / "empty.pdf"
-    make_pdf(pdf_path, "")
+def test_convert_pdf_to_mxl_raises_clear_error_when_audiveris_missing(tmp_path: Path):
+    pdf_path = tmp_path / "score.pdf"
+    pdf_path.write_bytes(b"%PDF-1.4 fake test score")
 
-    with pytest.raises(ValueError, match="No readable text"):
-        convert_pdf_to_music(pdf_path, output_dir=tmp_path / "out")
+    def missing_runner(command, *, cwd=None, timeout=None):
+        raise FileNotFoundError("audiveris")
+
+    with pytest.raises(AudiverisNotFoundError, match="Audiveris is required"):
+        convert_pdf_to_mxl(pdf_path, output_dir=tmp_path / "out", runner=missing_runner)
+
+
+def test_convert_pdf_to_mxl_requires_pdf_extension(tmp_path: Path):
+    image_path = tmp_path / "score.png"
+    image_path.write_bytes(b"not pdf")
+
+    with pytest.raises(ValueError, match="Input file must be a PDF"):
+        convert_pdf_to_mxl(image_path, output_dir=tmp_path / "out")

@@ -1,62 +1,63 @@
 # PDF to Musica 🎼
 
-Turn any text-based PDF into deterministic music. Upload a PDF, extract its words, convert those words into a melody, then download both MIDI and WAV files.
+Convert **sheet music PDFs** into **MusicXML compressed `.mxl` files**.
+
+This project is not an AI music generator. It is an Optical Music Recognition (OMR) wrapper: it takes a PDF that contains printed music notation and exports editable MusicXML/MXL using [Audiveris](https://github.com/Audiveris/audiveris).
 
 ## MVP
 
-- PDF text extraction
-- Deterministic text → melody engine
-- MIDI export
-- Synthesized WAV preview/download
-- Streamlit web app
-- CLI for automation
-- Pytest test suite
+- Upload a sheet-music PDF
+- Run Audiveris OMR
+- Export `.mxl` / MusicXML
+- Download the converted file
+- CLI for batch conversion
+- Streamlit web UI
+- Tests and GitHub Actions
+
+## Requirement
+
+Install Audiveris first and make the `audiveris` command available in PATH.
+
+Audiveris: https://github.com/Audiveris/audiveris
+
+On many systems you also need Java installed.
 
 ## Quick start
 
 ```bash
 uv run --extra dev pytest -q
-uv run python scripts/make_sample_pdf.py
-uv run pdf-to-musica sample-strategy.pdf --output-dir outputs --bpm 110 --max-notes 32
 uv run streamlit run app.py
 ```
 
 ## CLI
 
 ```bash
-pdf-to-musica path/to/file.pdf --output-dir outputs --bpm 120 --max-notes 96
+uv run pdf-to-musica path/to/sheet-music.pdf --output-dir outputs
+```
+
+If Audiveris is not in PATH:
+
+```bash
+uv run pdf-to-musica score.pdf --audiveris-command "C:/path/to/audiveris/bin/audiveris.bat"
 ```
 
 ## Deploy fast
 
-### Streamlit Community Cloud
+For production, deploy this as a small web app on a VM/container where Audiveris + Java are installed. Streamlit Cloud may not be ideal because system-level Audiveris installation is required.
 
-1. Push this repo to GitHub.
-2. Go to https://share.streamlit.io/.
-3. Select the repo and set entrypoint to `app.py`.
-4. Deploy.
+Recommended cheap deployment:
 
-### Hugging Face Spaces
-
-1. Create a new Space with Streamlit SDK.
-2. Push this repo.
-3. Space will run `app.py`.
+- Hetzner / DigitalOcean small VM
+- Docker image with Java + Audiveris + this app
+- Caddy/Nginx reverse proxy
 
 ## Monetization
 
-- Free: 3 conversions/day, watermark in summary.
-- Pro: $5/month for longer PDFs, more notes, and no watermark.
-- Creator pack: $15/month for premium instruments, batch conversion, commercial license.
-- B2B: API for educators, content creators, and accessibility/music learning tools.
+- Free: 1–3 PDF conversions/day
+- Pro: $9/month for batch conversion and larger scores
+- Studio: $29/month for high-priority conversion and API access
+- B2B: API for music schools, publishers, and notation apps
 
-## Next revenue features
+## Accuracy note
 
-- Stripe checkout + account limits.
-- Better instruments via SoundFont or hosted audio model.
-- OCR for scanned PDFs.
-- Shareable public track pages.
-- Batch PDF conversion for agencies.
-
-## Tech notes
-
-The current engine is deterministic: the same PDF text and settings produce the same melody. It intentionally avoids expensive AI inference so the MVP can run almost free on Streamlit/HF.
+PDF-to-MXL conversion quality depends on scan quality and score complexity. Clean digital PDFs convert best. Scanned/blurred sheets may require manual correction after export.

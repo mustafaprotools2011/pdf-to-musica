@@ -1,10 +1,15 @@
 """PDF to Musica package."""
 
-from .converter import ConversionOptions, ConversionResult, convert_pdf_to_music, text_to_notes
+from .converter import (
+    AudiverisNotFoundError,
+    ConversionOptions,
+    ConversionResult,
+    convert_pdf_to_mxl,
+)
 
 __all__ = [
+    "AudiverisNotFoundError",
     "ConversionOptions",
     "ConversionResult",
-    "convert_pdf_to_music",
-    "text_to_notes",
+    "convert_pdf_to_mxl",
 ]
