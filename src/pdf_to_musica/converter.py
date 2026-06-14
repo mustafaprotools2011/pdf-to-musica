@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Protocol
@@ -63,44 +64,54 @@ def convert_pdf_to_mxl(
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    command = [
-        options.audiveris_command,
-        "-batch",
-        "-export",
-        "-output",
-        str(out_dir),
-        str(source_pdf),
-    ]
-
     run = runner or _default_runner
-    try:
-        completed = run(command, cwd=source_pdf.parent, timeout=options.timeout_seconds)
-    except FileNotFoundError as exc:
-        raise AudiverisNotFoundError(
-            "Audiveris is required to convert sheet music PDFs to MusicXML/MXL. "
-            "Install Audiveris and make the 'audiveris' command available in PATH, "
-            "or pass --audiveris-command with the full executable path."
-        ) from exc
+    with tempfile.TemporaryDirectory(prefix="pdf-to-musica-") as temp_dir_name:
+        work_dir = Path(temp_dir_name)
+        safe_pdf = work_dir / "input.pdf"
+        safe_output_dir = work_dir / "audiveris-output"
+        safe_output_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_pdf, safe_pdf)
 
-    stdout = getattr(completed, "stdout", "") or ""
-    stderr = getattr(completed, "stderr", "") or ""
-    returncode = getattr(completed, "returncode", 1)
-    if returncode != 0:
-        raise AudiverisConversionError(
-            f"Audiveris failed with exit code {returncode}.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
-        )
+        command = [
+            options.audiveris_command,
+            "-batch",
+            "-export",
+            "-output",
+            str(safe_output_dir),
+            str(safe_pdf),
+        ]
 
-    mxl_path = _find_generated_mxl(out_dir, source_pdf.stem)
-    if not mxl_path:
-        raise AudiverisConversionError(
-            "Audiveris finished but no .mxl file was produced. "
-            "Check that the PDF contains readable music notation.\n"
-            f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
-        )
+        try:
+            completed = run(command, cwd=work_dir, timeout=options.timeout_seconds)
+        except FileNotFoundError as exc:
+            raise AudiverisNotFoundError(
+                "Audiveris is required to convert sheet music PDFs to MusicXML/MXL. "
+                "Install Audiveris and make the 'audiveris' command available in PATH, "
+                "or pass --audiveris-command with the full executable path."
+            ) from exc
+
+        stdout = getattr(completed, "stdout", "") or ""
+        stderr = getattr(completed, "stderr", "") or ""
+        returncode = getattr(completed, "returncode", 1)
+        if returncode != 0:
+            raise AudiverisConversionError(
+                f"Audiveris failed with exit code {returncode}.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            )
+
+        generated_mxl = _find_generated_mxl(safe_output_dir, safe_pdf.stem)
+        if not generated_mxl:
+            raise AudiverisConversionError(
+                "Audiveris finished but no .mxl file was produced. "
+                "Check that the PDF contains readable music notation.\n"
+                f"STDOUT:\n{stdout}\nSTDERR:\n{stderr}"
+            )
+
+        final_mxl_path = _unique_output_path(out_dir / f"{source_pdf.stem}.mxl")
+        shutil.copyfile(generated_mxl, final_mxl_path)
 
     return ConversionResult(
         source_pdf=source_pdf,
-        mxl_path=mxl_path,
+        mxl_path=final_mxl_path,
         engine="Audiveris",
         stdout=stdout,
         stderr=stderr,
@@ -139,6 +150,18 @@ def _default_runner(command: list[str], *, cwd: Path | None = None, timeout: int
         capture_output=True,
         check=False,
     )
+
+
+def _unique_output_path(path: Path) -> Path:
+    """Return a non-existing output path by appending -N when needed."""
+
+    if not path.exists():
+        return path
+    for index in range(2, 10_000):
+        candidate = path.with_name(f"{path.stem}-{index}{path.suffix}")
+        if not candidate.exists():
+            return candidate
+    raise FileExistsError(f"Could not find a free output filename near {path}")
 
 
 def _find_generated_mxl(output_dir: Path, source_stem: str) -> Path | None:
