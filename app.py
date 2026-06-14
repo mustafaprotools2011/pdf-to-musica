@@ -21,7 +21,8 @@ st.info(
 )
 
 uploaded = st.file_uploader("Sheet-music PDF", type=["pdf"])
-audiveris_command = st.text_input("Audiveris command/path", value="audiveris")
+default_options = ConversionOptions()
+audiveris_command = st.text_input("Audiveris command/path", value=default_options.audiveris_command)
 timeout = st.number_input("Timeout seconds", min_value=60, max_value=3600, value=600, step=60)
 
 if audiveris_command and not audiveris_available(audiveris_command):

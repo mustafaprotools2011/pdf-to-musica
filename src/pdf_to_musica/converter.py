@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Protocol
 
@@ -28,7 +28,7 @@ class AudiverisConversionError(RuntimeError):
 class ConversionOptions:
     """Controls PDF sheet-music to MXL conversion."""
 
-    audiveris_command: str = "audiveris"
+    audiveris_command: str = field(default_factory=lambda: default_audiveris_command())
     timeout_seconds: int = 600
 
 
@@ -107,9 +107,24 @@ def convert_pdf_to_mxl(
     )
 
 
-def audiveris_available(command: str = "audiveris") -> bool:
+def default_audiveris_command() -> str:
+    """Return the best Audiveris command for this machine.
+
+    Winget installs Audiveris on Windows at C:/Program Files/Audiveris/Audiveris.exe,
+    but it does not always update PATH for the already-running Hermes/Streamlit process.
+    Prefer that known executable when present; otherwise fall back to the PATH command.
+    """
+
+    windows_install = Path("C:/Program Files/Audiveris/Audiveris.exe")
+    if windows_install.exists():
+        return str(windows_install)
+    return "audiveris"
+
+
+def audiveris_available(command: str | None = None) -> bool:
     """Return True if the Audiveris command appears available."""
 
+    command = command or default_audiveris_command()
     if Path(command).exists():
         return True
     return shutil.which(command) is not None

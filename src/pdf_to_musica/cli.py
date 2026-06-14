@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .converter import ConversionOptions, convert_pdf_to_mxl
+from .converter import ConversionOptions, convert_pdf_to_mxl, default_audiveris_command
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -12,8 +12,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-dir", type=Path, default=Path("outputs"), help="Directory for generated .mxl files")
     parser.add_argument(
         "--audiveris-command",
-        default="audiveris",
-        help="Audiveris executable name/path. Example: C:/Audiveris/bin/audiveris.bat",
+        default=default_audiveris_command(),
+        help="Audiveris executable name/path. Example: C:/Program Files/Audiveris/Audiveris.exe",
     )
     parser.add_argument("--timeout", type=int, default=600, help="Audiveris timeout in seconds")
     return parser
